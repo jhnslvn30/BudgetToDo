@@ -228,197 +228,154 @@ function showTab(tabName) {
 // =====================================
 
 let deletedEntries = loadData("deletedBudget");
-let monthlyLimit = Number(localStorage.getItem("monthlyBudgetLimit")) || 0;
+let spendingLimits = loadData("spendingLimits");
+if (!spendingLimits || Array.isArray(spendingLimits)) {
+  spendingLimits = { day: 0, week: 0, month: 0, year: 0 };
+}
 let expensePeriod = "all";
+let entrySearchText = "";
 
-function getEntryDate(entry) {
-  // New entries store an ISO date. This fallback supports older saved entries.
-  if (entry.dateISO && /^\d{4}-\d{2}-\d{2}$/.test(entry.dateISO)) {
-    return entry.dateISO;
-  }
+function getLocalDateString(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return y + "-" + m + "-" + d;
+}
 
+function getEntryDateISO(entry) {
+  if (entry.dateISO && /^\d{4}-\d{2}-\d{2}$/.test(entry.dateISO)) return entry.dateISO;
   if (entry.date) {
     const parsed = new Date(entry.date);
-    if (!Number.isNaN(parsed.getTime())) {
-      return getLocalDateString(parsed);
-    }
+    if (!Number.isNaN(parsed.getTime())) return getLocalDateString(parsed);
   }
-
   return getTodayString();
 }
 
-function getLocalDateString(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return year + "-" + month + "-" + day;
+function entryDateObject(entry) {
+  return makeDateFromString(getEntryDateISO(entry));
 }
 
 function getWeekStart(date) {
-  const weekStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const day = weekStart.getDay();
-  weekStart.setDate(weekStart.getDate() - day); // Sunday is the first day.
-  return weekStart;
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  start.setDate(start.getDate() - start.getDay());
+  return start;
 }
 
-function isEntryInPeriod(entry, period) {
-  const entryDate = makeDateFromString(getEntryDate(entry));
-  const today = new Date();
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
-  if (period === "day") {
-    return getLocalDateString(entryDate) === getLocalDateString(startOfToday);
-  }
-
+function matchesPeriod(entry, period) {
+  const date = entryDateObject(entry);
+  const now = new Date();
+  if (period === "day") return getLocalDateString(date) === getLocalDateString(now);
   if (period === "week") {
-    const start = getWeekStart(startOfToday);
+    const start = getWeekStart(now);
     const end = new Date(start);
     end.setDate(end.getDate() + 7);
-    return entryDate >= start && entryDate < end;
+    return date >= start && date < end;
   }
-
-  if (period === "month") {
-    return entryDate.getFullYear() === today.getFullYear() &&
-      entryDate.getMonth() === today.getMonth();
-  }
-
-  if (period === "year") {
-    return entryDate.getFullYear() === today.getFullYear();
-  }
-
+  if (period === "month") return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+  if (period === "year") return date.getFullYear() === now.getFullYear();
   return true;
 }
 
 function calculateTotals() {
   let totalIncome = 0;
   let totalExpenses = 0;
-
-  for (let entryIndex = 0; entryIndex < budgetEntries.length; entryIndex++) {
-    const currentEntry = budgetEntries[entryIndex];
-
-    if (currentEntry.type === "income") {
-      totalIncome += currentEntry.amount;
-    }
-
-    if (currentEntry.type === "expense") {
-      totalExpenses += currentEntry.amount;
-    }
+  for (let i = 0; i < budgetEntries.length; i++) {
+    if (budgetEntries[i].type === "income") totalIncome += Number(budgetEntries[i].amount) || 0;
+    if (budgetEntries[i].type === "expense") totalExpenses += Number(budgetEntries[i].amount) || 0;
   }
-
-  return {
-    income: totalIncome,
-    expenses: totalExpenses,
-    balance: totalIncome - totalExpenses,
-  };
+  return { income: totalIncome, expenses: totalExpenses, balance: totalIncome - totalExpenses };
 }
 
-function getCurrentMonthExpenses() {
-  let monthExpenses = 0;
-  const now = new Date();
-
+function getExpensesForPeriod(period) {
+  let total = 0;
   for (let i = 0; i < budgetEntries.length; i++) {
     const entry = budgetEntries[i];
-    const entryDate = makeDateFromString(getEntryDate(entry));
+    if (entry.type === "expense" && matchesPeriod(entry, period)) total += Number(entry.amount) || 0;
+  }
+  return total;
+}
 
-    if (entry.type === "expense" &&
-        entryDate.getFullYear() === now.getFullYear() &&
-        entryDate.getMonth() === now.getMonth()) {
-      monthExpenses += entry.amount;
+function periodLabel(period) {
+  return { day: "Today", week: "This week", month: "This month", year: "This year" }[period];
+}
+
+function drawLimitSummaries() {
+  const container = getElement("limitSummaries");
+  container.innerHTML = "";
+  const periods = ["day", "week", "month", "year"];
+  for (let i = 0; i < periods.length; i++) {
+    const period = periods[i];
+    const limit = Number(spendingLimits[period]) || 0;
+    const spent = getExpensesForPeriod(period);
+    const remaining = limit - spent;
+    const card = document.createElement("div");
+    card.className = "limit-summary";
+    const title = document.createElement("strong");
+    title.textContent = periodLabel(period);
+    const detail = document.createElement("span");
+    detail.textContent = "Spent: " + formatPeso(spent);
+    const status = document.createElement("small");
+    if (limit <= 0) status.textContent = "No limit set";
+    else if (remaining < 0) status.textContent = formatPeso(Math.abs(remaining)) + " over limit";
+    else status.textContent = formatPeso(remaining) + " remaining";
+    const track = document.createElement("div");
+    track.className = "limit-progress-track";
+    const bar = document.createElement("div");
+    bar.className = "limit-progress";
+    bar.style.width = limit > 0 ? Math.min((spent / limit) * 100, 100) + "%" : "0%";
+    if (limit > 0 && spent > limit) bar.classList.add("danger");
+    else if (limit > 0 && spent >= limit * 0.8) bar.classList.add("warning");
+    track.appendChild(bar);
+    card.append(title, detail, status, track);
+    container.appendChild(card);
+  }
+}
+
+getElement("limitsForm").addEventListener("submit", function (event) {
+  event.preventDefault();
+  const periods = ["day", "week", "month", "year"];
+  const ids = { day: "dailyLimit", week: "weeklyLimit", month: "monthlyLimit", year: "yearlyLimit" };
+  const updated = {};
+  for (let i = 0; i < periods.length; i++) {
+    const period = periods[i];
+    const raw = getElement(ids[period]).value.trim();
+    if (raw === "") updated[period] = 0;
+    else {
+      const value = Math.round(Number(raw) * 100) / 100;
+      if (!Number.isFinite(value) || value <= 0) {
+        getElement("limitsMsg").textContent = "Enter a positive amount or leave the field blank.";
+        return;
+      }
+      updated[period] = value;
     }
   }
-
-  return monthExpenses;
-}
-
-function drawLimit() {
-  const spent = getCurrentMonthExpenses();
-  const progress = monthlyLimit > 0 ? Math.min((spent / monthlyLimit) * 100, 100) : 0;
-  const remaining = monthlyLimit - spent;
-
-  getElement("monthlyLimit").value = monthlyLimit > 0 ? monthlyLimit : "";
-  getElement("limitSpent").textContent = "Spent this month: " + formatPeso(spent);
-  getElement("limitProgress").style.width = progress + "%";
-
-  if (monthlyLimit <= 0) {
-    getElement("limitStatus").textContent = "Not set";
-    getElement("limitRemaining").textContent = "No limit set";
-    getElement("limitStatus").className = "limit-status";
-    getElement("limitProgress").className = "limit-progress";
-    return;
-  }
-
-  getElement("limitRemaining").textContent = remaining >= 0
-    ? formatPeso(remaining) + " remaining"
-    : formatPeso(Math.abs(remaining)) + " over limit";
-
-  if (remaining < 0) {
-    getElement("limitStatus").textContent = "Over limit";
-    getElement("limitStatus").className = "limit-status danger";
-    getElement("limitProgress").className = "limit-progress danger";
-  } else if (progress >= 80) {
-    getElement("limitStatus").textContent = "Near limit";
-    getElement("limitStatus").className = "limit-status warning";
-    getElement("limitProgress").className = "limit-progress warning";
-  } else {
-    getElement("limitStatus").textContent = "On track";
-    getElement("limitStatus").className = "limit-status good";
-    getElement("limitProgress").className = "limit-progress";
-  }
-}
-
-getElement("limitForm").addEventListener("submit", function (event) {
-  event.preventDefault();
-
-  const limitText = getElement("monthlyLimit").value.trim();
-  const message = getElement("limitMsg");
-
-  if (limitText === "") {
-    monthlyLimit = 0;
-    localStorage.removeItem("monthlyBudgetLimit");
-    message.textContent = "Monthly spending limit removed.";
-    drawLimit();
-    return;
-  }
-
-  const limitValue = Math.round(Number(limitText) * 100) / 100;
-  if (!Number.isFinite(limitValue) || limitValue <= 0) {
-    message.textContent = "Enter a limit greater than 0, or leave it blank to remove it.";
-    return;
-  }
-
-  monthlyLimit = limitValue;
-  localStorage.setItem("monthlyBudgetLimit", String(monthlyLimit));
-  message.textContent = "Monthly spending limit saved.";
-  drawLimit();
+  spendingLimits = updated;
+  saveData("spendingLimits", spendingLimits);
+  getElement("limitsMsg").textContent = "Spending limits saved.";
+  drawLimitSummaries();
 });
 
-// Filter expenses and income entries by the selected date period.
-getElement("expensePeriod").addEventListener("change", function (event) {
-  expensePeriod = event.target.value;
-  drawBudget();
-});
+function loadLimitInputs() {
+  getElement("dailyLimit").value = spendingLimits.day || "";
+  getElement("weeklyLimit").value = spendingLimits.week || "";
+  getElement("monthlyLimit").value = spendingLimits.month || "";
+  getElement("yearlyLimit").value = spendingLimits.year || "";
+}
 
 function addToDeletedHistory(entry, source) {
-  deletedEntries.unshift({
-    entry: entry,
-    source: source,
-    deletedAt: new Date().toISOString(),
-  });
+  deletedEntries.unshift({ entry: entry, source: source, deletedAt: new Date().toISOString() });
   saveData("deletedBudget", deletedEntries);
 }
 
 function drawDeletedHistory() {
-  const deletedList = getElement("deletedList");
-  deletedList.innerHTML = "";
+  const list = getElement("deletedList");
+  list.innerHTML = "";
   getElement("deletedCount").textContent = deletedEntries.length;
-
+  getElement("clearHistoryButton").hidden = deletedEntries.length === 0;
   if (deletedEntries.length === 0) {
-    deletedList.appendChild(createEmptyRow("No deleted entries."));
-    getElement("clearHistoryButton").hidden = true;
+    list.appendChild(createEmptyRow("No deleted records."));
     return;
   }
-
-  getElement("clearHistoryButton").hidden = false;
 
   for (let i = 0; i < deletedEntries.length; i++) {
     const record = deletedEntries[i];
@@ -426,21 +383,18 @@ function drawDeletedHistory() {
     const row = document.createElement("li");
     const info = document.createElement("div");
     info.className = "grow";
-    info.textContent = entry.desc;
-
+    info.textContent = entry.type === "task" ? "To-do: " + entry.task.text : entry.desc;
     const meta = document.createElement("small");
     const deletedDate = new Date(record.deletedAt);
-    meta.textContent = (entry.type === "task" ? "To-do task" :
-      (entry.type === "income" ? "Income · " : "Expense · " + formatPeso(entry.amount))) +
-      " · Deleted " +
-      deletedDate.toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" });
+    meta.textContent = (entry.type === "task" ? "Task" : (entry.category || "Other") + " · " + formatPeso(entry.amount)) +
+      " · Deleted " + deletedDate.toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" });
     info.appendChild(meta);
 
-    const restoreButton = document.createElement("button");
-    restoreButton.type = "button";
-    restoreButton.className = "small-action";
-    restoreButton.textContent = "Restore";
-    restoreButton.onclick = function () {
+    const restore = document.createElement("button");
+    restore.type = "button";
+    restore.className = "small-action";
+    restore.textContent = "Restore";
+    restore.onclick = function () {
       if (record.source === "todo" && entry.task) {
         todoTasks.unshift(entry.task);
         sortTasksByDueDate();
@@ -455,112 +409,146 @@ function drawDeletedHistory() {
       drawBudget();
     };
 
-    const removeButton = document.createElement("button");
-    removeButton.type = "button";
-    removeButton.className = "del";
-    removeButton.textContent = "✕";
-    removeButton.setAttribute("aria-label", "Permanently delete " + entry.desc);
-    removeButton.onclick = function () {
-      if (!confirm("Permanently delete this history record? This cannot be undone.")) {
-        return;
-      }
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "del";
+    remove.textContent = "✕";
+    remove.setAttribute("aria-label", "Permanently delete history record");
+    remove.onclick = function () {
+      if (!confirm("Permanently delete this history record? This cannot be undone.")) return;
       deletedEntries.splice(i, 1);
       saveData("deletedBudget", deletedEntries);
       drawDeletedHistory();
     };
-
-    row.appendChild(info);
-    row.appendChild(restoreButton);
-    row.appendChild(removeButton);
-    deletedList.appendChild(row);
+    row.append(info, restore, remove);
+    list.appendChild(row);
   }
 }
 
 function clearDeletedHistory() {
-  if (deletedEntries.length === 0) return;
-
-  if (confirm("Permanently clear all " + deletedEntries.length +
-      " deleted history records? This cannot be undone.")) {
+  if (!deletedEntries.length) return;
+  if (confirm("Permanently clear all deleted history records? This cannot be undone.")) {
     deletedEntries = [];
     saveData("deletedBudget", deletedEntries);
     drawDeletedHistory();
   }
 }
 
-function drawBudget() {
-  const totals = calculateTotals();
+function editBudgetEntry(entry) {
+  const newDesc = prompt("Edit description:", entry.desc);
+  if (newDesc === null) return;
+  if (!newDesc.trim()) { alert("Description cannot be empty."); return; }
 
-  getElement("income").textContent = formatPeso(totals.income);
-  getElement("expenses").textContent = formatPeso(totals.expenses);
+  const newAmountText = prompt("Edit amount (₱):", String(entry.amount));
+  if (newAmountText === null) return;
+  const newAmount = Math.round(Number(newAmountText) * 100) / 100;
+  if (!Number.isFinite(newAmount) || newAmount <= 0) { alert("Enter an amount greater than 0."); return; }
 
-  const balanceSign = totals.balance < 0 ? "−" : "";
-  getElement("balance").textContent =
-    balanceSign + formatPeso(Math.abs(totals.balance));
-
-  const budgetList = getElement("budgetList");
-  budgetList.innerHTML = "";
-
-  const visibleEntries = budgetEntries.filter(function (entry) {
-    return isEntryInPeriod(entry, expensePeriod);
-  });
-
-  if (visibleEntries.length === 0) {
-    budgetList.appendChild(createEmptyRow(
-      expensePeriod === "all" ? "No entries yet. Add your first income or expense above."
-        : "No entries found for this period."
-    ));
+  const categories = ["Food", "Transportation", "School", "Bills", "Shopping", "Health", "Entertainment", "Other"];
+  const categoryPrompt = "Choose category by number:\n" + categories.map((c, i) => (i + 1) + ". " + c).join("\n");
+  const selected = prompt(categoryPrompt, String(Math.max(1, categories.indexOf(entry.category || "Other") + 1)));
+  if (selected === null) return;
+  const categoryIndex = Number(selected) - 1;
+  if (!Number.isInteger(categoryIndex) || categoryIndex < 0 || categoryIndex >= categories.length) {
+    alert("Invalid category selection.");
+    return;
   }
 
-  for (let i = 0; i < visibleEntries.length; i++) {
-    const currentEntry = visibleEntries[i];
-    const listItem = document.createElement("li");
-    const informationContainer = document.createElement("div");
-    informationContainer.className = "grow";
-    informationContainer.textContent = currentEntry.desc;
+  const old = { desc: entry.desc, amount: entry.amount, category: entry.category };
+  entry.desc = newDesc.trim();
+  entry.amount = newAmount;
+  entry.category = categories[categoryIndex];
 
-    const dateText = document.createElement("small");
-    dateText.textContent = currentEntry.date || getEntryDate(currentEntry);
-    informationContainer.appendChild(dateText);
+  const totals = calculateTotals();
+  if (totals.balance < -0.000001) {
+    Object.assign(entry, old);
+    alert("This change would make your balance negative.");
+    return;
+  }
 
-    const amountSpan = document.createElement("span");
-    if (currentEntry.type === "income") {
-      amountSpan.className = "amt in";
-      amountSpan.textContent = "+" + formatPeso(currentEntry.amount);
-    } else {
-      amountSpan.className = "amt out";
-      amountSpan.textContent = "−" + formatPeso(currentEntry.amount);
+  const periods = ["day", "week", "month", "year"];
+  for (let i = 0; i < periods.length; i++) {
+    const period = periods[i];
+    const limit = Number(spendingLimits[period]) || 0;
+    if (entry.type === "expense" && limit > 0 && getExpensesForPeriod(period) > limit + 0.000001) {
+      Object.assign(entry, old);
+      alert("This change would exceed your " + period + " spending limit.");
+      return;
     }
+  }
 
-    const deleteButton = document.createElement("button");
-    deleteButton.className = "del";
-    deleteButton.textContent = "✕";
-    deleteButton.setAttribute("aria-label", "Delete " + currentEntry.desc);
-    deleteButton.onclick = function () {
-      const question = "Move this entry to deleted history?\n\n" +
-        currentEntry.desc + " (" + formatPeso(currentEntry.amount) + ")";
-      if (!confirm(question)) return;
+  saveData("budget", budgetEntries);
+  drawBudget();
+}
 
-      const originalIndex = budgetEntries.indexOf(currentEntry);
-      if (originalIndex !== -1) {
-        const removedEntry = budgetEntries.splice(originalIndex, 1)[0];
-        addToDeletedHistory(removedEntry, "budget");
+function drawBudget() {
+  const totals = calculateTotals();
+  getElement("income").textContent = formatPeso(totals.income);
+  getElement("expenses").textContent = formatPeso(totals.expenses);
+  getElement("balance").textContent = (totals.balance < 0 ? "−" : "") + formatPeso(Math.abs(totals.balance));
+
+  const list = getElement("budgetList");
+  list.innerHTML = "";
+  const visible = budgetEntries.filter(function (entry) {
+    const matchesText = (entry.desc + " " + (entry.category || "Other")).toLowerCase().includes(entrySearchText);
+    return matchesPeriod(entry, expensePeriod) && matchesText;
+  });
+
+  if (visible.length === 0) {
+    list.appendChild(createEmptyRow(budgetEntries.length ? "No entries match your filter or search." : "No entries yet. Add your first income or expense above."));
+  }
+
+  for (let i = 0; i < visible.length; i++) {
+    const entry = visible[i];
+    const row = document.createElement("li");
+    const info = document.createElement("div");
+    info.className = "grow";
+    info.textContent = entry.desc;
+    const meta = document.createElement("small");
+    meta.textContent = (entry.category || "Other") + " · " + (entry.date || getEntryDateISO(entry));
+    info.appendChild(meta);
+
+    const amount = document.createElement("span");
+    amount.className = entry.type === "income" ? "amt in" : "amt out";
+    amount.textContent = (entry.type === "income" ? "+" : "−") + formatPeso(entry.amount);
+
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "small-action";
+    edit.textContent = "Edit";
+    edit.onclick = function () { editBudgetEntry(entry); };
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "del";
+    del.textContent = "✕";
+    del.setAttribute("aria-label", "Delete " + entry.desc);
+    del.onclick = function () {
+      if (!confirm("Move this entry to deleted history?\n\n" + entry.desc + " (" + formatPeso(entry.amount) + ")")) return;
+      const index = budgetEntries.indexOf(entry);
+      if (index !== -1) {
+        addToDeletedHistory(budgetEntries.splice(index, 1)[0], "budget");
         saveData("budget", budgetEntries);
         drawBudget();
       }
     };
-
-    listItem.appendChild(informationContainer);
-    listItem.appendChild(amountSpan);
-    listItem.appendChild(deleteButton);
-    budgetList.appendChild(listItem);
+    row.append(info, amount, edit, del);
+    list.appendChild(row);
   }
 
-  let countText = visibleEntries.length === 1 ? " entry shown" : " entries shown";
-  getElement("budgetCount").textContent = visibleEntries.length + countText;
-
-  drawLimit();
+  getElement("budgetCount").textContent = visible.length + (visible.length === 1 ? " entry shown" : " entries shown");
+  drawLimitSummaries();
   drawDeletedHistory();
 }
+
+getElement("expensePeriod").addEventListener("change", function (event) {
+  expensePeriod = event.target.value;
+  drawBudget();
+});
+getElement("entrySearch").addEventListener("input", function (event) {
+  entrySearchText = event.target.value.trim().toLowerCase();
+  drawBudget();
+});
 
 // =====================================
 // BUDGET FORM
@@ -568,72 +556,47 @@ function drawBudget() {
 
 getElement("budgetForm").addEventListener("submit", function (event) {
   event.preventDefault();
-
-  const descriptionText = getElement("desc").value.trim();
+  const description = getElement("desc").value.trim();
   const amountText = getElement("amount").value.trim();
-  const selectedType = getElement("type").value;
-  const messageBox = getElement("budgetMsg");
+  const type = getElement("type").value;
+  const category = getElement("category").value;
+  const message = getElement("budgetMsg");
 
-  if (descriptionText === "" || amountText === "") {
-    messageBox.textContent = "Enter a description and an amount.";
-    return;
-  }
+  if (!description || !amountText) { message.textContent = "Enter a description and an amount."; return; }
+  const amount = Math.round(Number(amountText) * 100) / 100;
+  if (!Number.isFinite(amount) || amount <= 0) { message.textContent = "The amount must be greater than 0."; return; }
 
-  const amountValue = Math.round(Number(amountText) * 100) / 100;
-  if (!Number.isFinite(amountValue) || amountValue <= 0) {
-    messageBox.textContent = "The amount must be greater than 0.";
-    return;
-  }
-
-  if (selectedType === "expense") {
+  if (type === "expense") {
     const totals = calculateTotals();
-    const balanceInCentavos = Math.round(totals.balance * 100);
-    const amountInCentavos = Math.round(amountValue * 100);
-
-    if (balanceInCentavos <= 0) {
-      messageBox.textContent = "You have no balance left to spend. Add income first.";
+    if (amount > totals.balance + 0.000001) {
+      message.textContent = "Not enough balance. Available balance: " + formatPeso(Math.max(0, totals.balance)) + ".";
       return;
     }
-
-    if (amountInCentavos > balanceInCentavos) {
-      messageBox.textContent = "Not enough balance. You have " +
-        formatPeso(totals.balance) + " but this expense is " +
-        formatPeso(amountValue) + ".";
-      return;
-    }
-
-    // The monthly limit blocks a new expense that would exceed the saved limit.
-    if (monthlyLimit > 0) {
-      const remainingLimit = monthlyLimit - getCurrentMonthExpenses();
-      if (amountInCentavos > Math.round(remainingLimit * 100)) {
-        messageBox.textContent = "Monthly limit reached. You have " +
-          formatPeso(Math.max(remainingLimit, 0)) +
-          " left in your monthly spending limit.";
+    const candidate = { type: "expense", amount: amount, dateISO: getLocalDateString(new Date()) };
+    const periods = ["day", "week", "month", "year"];
+    for (let i = 0; i < periods.length; i++) {
+      const period = periods[i];
+      const limit = Number(spendingLimits[period]) || 0;
+      if (limit > 0 && getExpensesForPeriod(period) + amount > limit + 0.000001) {
+        message.textContent = "This expense exceeds your remaining " + period + " limit of " +
+          formatPeso(Math.max(0, limit - getExpensesForPeriod(period))) + ".";
         return;
       }
     }
   }
 
-  messageBox.textContent = "";
-
+  message.textContent = "";
   const now = new Date();
-  const currentDate = now.toLocaleDateString("en-PH", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-
   budgetEntries.unshift({
-    desc: descriptionText,
-    amount: amountValue,
-    type: selectedType,
-    date: currentDate,
+    desc: description,
+    amount: amount,
+    type: type,
+    category: category,
+    date: now.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }),
     dateISO: getLocalDateString(now),
   });
-
   saveData("budget", budgetEntries);
   drawBudget();
-
   getElement("desc").value = "";
   getElement("amount").value = "";
   getElement("desc").focus();
@@ -644,19 +607,12 @@ getElement("budgetForm").addEventListener("submit", function (event) {
 // =====================================
 
 function clearBudget() {
-  if (budgetEntries.length === 0) return;
-
-  const question = "Move all " + budgetEntries.length +
-    " entries to deleted history?\n\nYou can restore them later from Deleted history.";
-
-  if (confirm(question)) {
-    for (let i = 0; i < budgetEntries.length; i++) {
-      addToDeletedHistory(budgetEntries[i], "budget");
-    }
-    budgetEntries = [];
-    saveData("budget", budgetEntries);
-    drawBudget();
-  }
+  if (!budgetEntries.length) return;
+  if (!confirm("Move all " + budgetEntries.length + " entries to deleted history?")) return;
+  for (let i = 0; i < budgetEntries.length; i++) addToDeletedHistory(budgetEntries[i], "budget");
+  budgetEntries = [];
+  saveData("budget", budgetEntries);
+  drawBudget();
 }
 
 // =====================================
@@ -805,21 +761,8 @@ function drawTodo() {
     deleteButton.setAttribute("aria-label", "Delete " + currentTask.text);
 
     deleteButton.onclick = function () {
-      if (!confirm("Delete this task?\\n\\n" + currentTask.text)) return;
-
-      deletedEntries.unshift({
-        entry: {
-          desc: "To-do: " + currentTask.text,
-          amount: 0,
-          type: "task",
-          date: currentTask.dueDate || "",
-          task: currentTask,
-        },
-        source: "todo",
-        deletedAt: new Date().toISOString(),
-      });
-      saveData("deletedBudget", deletedEntries);
-
+      if (!confirm("Move this task to deleted history?\\n\\n" + currentTask.text)) return;
+      addToDeletedHistory({ type: "task", task: currentTask }, "todo");
       todoTasks.splice(todoTasks.indexOf(currentTask), 1);
       saveData("tasks", todoTasks);
       drawDeletedHistory();
@@ -941,17 +884,16 @@ getElement("filters").addEventListener("click", function (event) {
 
 function clearDone() {
   const remainingTasks = [];
-
   for (let taskIndex = 0; taskIndex < todoTasks.length; taskIndex++) {
-    if (todoTasks[taskIndex].done === false) {
+    if (todoTasks[taskIndex].done === true) {
+      addToDeletedHistory({ type: "task", task: todoTasks[taskIndex] }, "todo");
+    } else {
       remainingTasks.push(todoTasks[taskIndex]);
     }
   }
-
   todoTasks = remainingTasks;
-
   saveData("tasks", todoTasks);
-
+  drawDeletedHistory();
   drawTodo();
 }
 
