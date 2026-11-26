@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Budget & To-Do</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#14213d" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Budget" />
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Budget & To-Do</h1>
+            <h3><p>"Track what you spend. Finish what you start."</p></h3>
+
+      <div class="tabs" role="tablist">
+        <button
+          role="tab"
+          id="tab-budget"
+          aria-selected="true"
+          onclick="showTab('budget')"
+        >
+          Budget
+        </button>
+        <button
+          role="tab"
+          id="tab-todo"
+          aria-selected="false"
+          onclick="showTab('todo')"
+        >
+          To-do
+        </button>
+      </div>
+      <button
+        id="reminderBox"
+        class="reminder"
+        hidden
+        onclick="showTab('todo')"
+      ></button>
+
+      <!-- BUDGET -->
+      <section id="budget">
+        <div class="summary">
+          <div class="balance">
+            <small>Balance</small><strong id="balance">₱0.00</strong>
+          </div>
+          <div class="stat">
+            <small>Income</small><strong class="in" id="income">₱0.00</strong>
+          </div>
+          <div class="stat">
+            <small>Expenses</small
+            ><strong class="out" id="expenses">₱0.00</strong>
+          </div>
+        </div>
+
+        <section class="card budget-limit-card" aria-labelledby="limitHeading">
+          <div class="section-heading">
+            <div>
+              <h2 id="limitHeading">Spending limit</h2>
+              <p class="muted-note">Set a monthly expense limit to help control spending.</p>
+            </div>
+            <span id="limitStatus" class="limit-status">Not set</span>
+          </div>
+          <form id="limitForm" class="limit-form">
+            <label for="monthlyLimit">Monthly limit (₱)</label>
+            <div class="row">
+              <input id="monthlyLimit" type="number" min="0" step="0.01"
+                     inputmode="decimal" placeholder="e.g. 5000" />
+              <button class="primary" type="submit">Save limit</button>
+            </div>
+            <p class="msg" id="limitMsg" role="status"></p>
+          </form>
+          <div class="limit-progress-track" aria-label="Monthly spending progress">
+            <div id="limitProgress" class="limit-progress"></div>
+          </div>
+          <div class="limit-details">
+            <span id="limitSpent">Spent this month: ₱0.00</span>
+            <strong id="limitRemaining">No limit set</strong>
+          </div>
+        </section>
+
+        <form class="card" id="budgetForm">
+          <input
+            id="desc"
+            type="text"
+            placeholder="What was it for? (e.g. Groceries)"
+            maxlength="60"
+          />
+          <div class="row">
+            <input
+              id="amount"
+              type="number"
+              placeholder="Amount (₱)"
+              min="0"
+              step="0.01"
+              inputmode="decimal"
+            />
+            <select id="type" aria-label="Type">
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+            </select>
+          </div>
+          <button class="primary" type="submit">Add entry</button>
+          <p class="msg" id="budgetMsg" role="alert"></p>
+        </form>
+
+        <div class="entries-heading">
+          <h2>Entries</h2>
+          <label class="filter-control" for="expensePeriod">
+            Filter
+            <select id="expensePeriod">
+              <option value="all">All dates</option>
+              <option value="day">Today</option>
+              <option value="week">This week</option>
+              <option value="month">This month</option>
+              <option value="year">This year</option>
+            </select>
+          </label>
+        </div>
+        <div class="card"><ul id="budgetList"></ul></div>
+        <div class="foot">
+          <span id="budgetCount"></span
+          ><button class="link" onclick="clearBudget()">
+            Clear all entries
+          </button>
+        </div>
+
+        <details class="history-panel">
+          <summary>Deleted history <span id="deletedCount" class="history-count">0</span></summary>
+          <p class="muted-note">Deleted budget entries are kept here. You can restore them or permanently remove them.</p>
+          <div class="card"><ul id="deletedList"></ul></div>
+          <button class="link" id="clearHistoryButton" type="button" onclick="clearDeletedHistory()">
+            Clear deleted history
+          </button>
+        </details>
+      </section>
+
+      <!-- TODO -->
+      <section id="todo" hidden>
+        <form class="card" id="todoForm">
+          <input
+            id="task"
+            type="text"
+            placeholder="Add a task"
+            maxlength="100"
+          />
+          <div class="row">
+            <label class="datefield">
+              Due date
+              <input id="dueDate" type="date" />
+            </label>
+            <button class="primary" type="submit">Add task</button>
+          </div>
+          <p class="msg" id="todoMsg" role="alert"></p>
+        </form>
+
+        <div class="filters" id="filters">
+          <button aria-pressed="true" data-f="all">All</button>
+          <button aria-pressed="false" data-f="active">To do</button>
+          <button aria-pressed="false" data-f="done">Done</button>
+        </div>
+        <div class="card"><ul id="todoList"></ul></div>
+        <div class="foot">
+          <span id="todoCount"></span
+          ><button class="link" onclick="clearDone()">
+            Remove finished tasks
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
