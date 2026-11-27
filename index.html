@@ -67,6 +67,22 @@
           </div>
         </div>
 
+        <section class="card budget-limit-card" aria-labelledby="limitHeading">
+          <h2 id="limitHeading">Spending limits</h2>
+          <p class="muted-note">Set optional limits for each spending period.</p>
+          <form id="limitForm" class="limit-form">
+            <div class="limit-input-grid">
+              <label>Daily (₱)<input id="limit-day" type="number" min="0" step="0.01" placeholder="No limit"></label>
+              <label>Weekly (₱)<input id="limit-week" type="number" min="0" step="0.01" placeholder="No limit"></label>
+              <label>Monthly (₱)<input id="limit-month" type="number" min="0" step="0.01" placeholder="No limit"></label>
+              <label>Yearly (₱)<input id="limit-year" type="number" min="0" step="0.01" placeholder="No limit"></label>
+            </div>
+            <button class="primary" type="submit">Save spending limits</button>
+            <p class="msg" id="limitMsg" role="status"></p>
+          </form>
+          <div id="limitOverview" class="limit-overview"></div>
+        </section>
+
         <form class="card" id="budgetForm">
           <input
             id="desc"
@@ -74,18 +90,6 @@
             placeholder="What was it for? (e.g. Groceries)"
             maxlength="60"
           />
-          <div class="row">
-            <select id="category" aria-label="Category">
-              <option value="Food">Food</option>
-              <option value="Transportation">Transportation</option>
-              <option value="School">School</option>
-              <option value="Bills">Bills</option>
-              <option value="Shopping">Shopping</option>
-              <option value="Health">Health</option>
-              <option value="Entertainment">Entertainment</option>
-              <option value="Other" selected>Other</option>
-            </select>
-          </div>
           <div class="row">
             <input
               id="amount"
@@ -100,31 +104,23 @@
               <option value="income">Income</option>
             </select>
           </div>
-          <button class="primary" type="submit">Add entry</button>
+          <select id="category" aria-label="Expense category">
+            <option>Food</option><option>Transportation</option><option>School</option>
+            <option>Bills</option><option>Shopping</option><option>Health</option>
+            <option>Entertainment</option><option>Other</option>
+          </select>
+          <button class="primary" id="budgetSubmit" type="submit">Add entry</button>
+          <button class="link" id="cancelEdit" type="button" hidden>Cancel edit</button>
           <p class="msg" id="budgetMsg" role="alert"></p>
         </form>
 
-        <section class="card limits-card">
-          <div class="section-heading">
-            <div>
-              <h2>Spending limits</h2>
-              <p class="muted-note">Set limits for different time periods. Leave a field blank to disable that limit.</p>
-            </div>
-          </div>
-          <form id="limitsForm" class="limits-grid">
-            <label>Daily limit (₱)<input id="dailyLimit" type="number" min="0" step="0.01" placeholder="No limit" /></label>
-            <label>Weekly limit (₱)<input id="weeklyLimit" type="number" min="0" step="0.01" placeholder="No limit" /></label>
-            <label>Monthly limit (₱)<input id="monthlyLimit" type="number" min="0" step="0.01" placeholder="No limit" /></label>
-            <label>Yearly limit (₱)<input id="yearlyLimit" type="number" min="0" step="0.01" placeholder="No limit" /></label>
-            <button class="primary limits-save" type="submit">Save limits</button>
-            <p class="msg" id="limitsMsg" role="status"></p>
-          </form>
-          <div id="limitSummaries" class="limit-summaries"></div>
-        </section>
-
+        <div class="entries-tools">
+          <input id="entrySearch" type="search" placeholder="Search description or category..." aria-label="Search entries">
+        </div>
         <div class="entries-heading">
           <h2>Entries</h2>
-          <label class="filter-control" for="expensePeriod">Period
+          <label class="filter-control" for="expensePeriod">
+            Filter
             <select id="expensePeriod">
               <option value="all">All dates</option>
               <option value="day">Today</option>
@@ -134,7 +130,6 @@
             </select>
           </label>
         </div>
-        <input id="entrySearch" class="search-input" type="search" placeholder="Search description or category..." aria-label="Search entries" />
         <div class="card"><ul id="budgetList"></ul></div>
         <div class="foot">
           <span id="budgetCount"></span
@@ -142,11 +137,29 @@
             Clear all entries
           </button>
         </div>
+
+        <section class="card analytics-panel">
+          <h2>Expense Charts</h2>
+          <p class="muted-note">See how expenses are distributed by category for the selected month.</p>
+          <label class="report-month-label">Chart month <input id="chartMonth" type="month"></label>
+          <canvas id="expenseChart" height="240" aria-label="Expense chart by category"></canvas>
+          <div id="chartLegend" class="chart-legend"></div>
+        </section>
+
+        <section class="card report-panel">
+          <h2>Monthly Financial Reports</h2>
+          <label class="report-month-label">Report month <input id="reportMonth" type="month"></label>
+          <div id="monthlyReport"></div>
+          <button class="primary" id="printReport" type="button">Print monthly report</button>
+        </section>
+
         <details class="history-panel">
           <summary>Deleted history <span id="deletedCount" class="history-count">0</span></summary>
-          <p class="muted-note">Deleted budget entries and tasks can be restored here.</p>
+          <p class="muted-note">Deleted budget entries are kept here. You can restore them or permanently remove them.</p>
           <div class="card"><ul id="deletedList"></ul></div>
-          <button class="link" id="clearHistoryButton" type="button" onclick="clearDeletedHistory()">Clear deleted history</button>
+          <button class="link" id="clearHistoryButton" type="button" onclick="clearDeletedHistory()">
+            Clear deleted history
+          </button>
         </details>
       </section>
 
