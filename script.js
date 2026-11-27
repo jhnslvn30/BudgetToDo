@@ -224,396 +224,226 @@ function showTab(tabName) {
 }
 
 // =====================================
-// BUDGET FUNCTIONS
+// BUDGET FUNCTIONS AND FINANCIAL ANALYTICS
 // =====================================
-
 let deletedEntries = loadData("deletedBudget");
-let spendingLimits = loadData("spendingLimits");
-if (!spendingLimits || Array.isArray(spendingLimits)) {
-  spendingLimits = { day: 0, week: 0, month: 0, year: 0 };
-}
-let expensePeriod = "all";
+let spendingLimits = JSON.parse(localStorage.getItem("spendingLimits") || "{}");
 let entrySearchText = "";
+let editingEntry = null;
 
-function getLocalDateString(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return y + "-" + m + "-" + d;
-}
-
-function getEntryDateISO(entry) {
-  if (entry.dateISO && /^\d{4}-\d{2}-\d{2}$/.test(entry.dateISO)) return entry.dateISO;
+function entryISO(entry) {
+  if (entry.dateISO) return entry.dateISO;
   if (entry.date) {
     const parsed = new Date(entry.date);
-    if (!Number.isNaN(parsed.getTime())) return getLocalDateString(parsed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return [parsed.getFullYear(), String(parsed.getMonth()+1).padStart(2,"0"), String(parsed.getDate()).padStart(2,"0")].join("-");
+    }
   }
   return getTodayString();
 }
-
-function entryDateObject(entry) {
-  return makeDateFromString(getEntryDateISO(entry));
+function totalsFor(entries) {
+  return entries.reduce((t,e) => {
+    if (e.type === "income") t.income += Number(e.amount)||0;
+    if (e.type === "expense") t.expenses += Number(e.amount)||0;
+    t.balance=t.income-t.expenses; return t;
+  },{income:0,expenses:0,balance:0});
 }
-
-function getWeekStart(date) {
-  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  start.setDate(start.getDate() - start.getDay());
-  return start;
+function calculateTotals(){ return totalsFor(budgetEntries); }
+function startOfWeek(d) {
+  const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  x.setDate(x.getDate()-x.getDay()); return x;
 }
-
-function matchesPeriod(entry, period) {
-  const date = entryDateObject(entry);
-  const now = new Date();
-  if (period === "day") return getLocalDateString(date) === getLocalDateString(now);
-  if (period === "week") {
-    const start = getWeekStart(now);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 7);
-    return date >= start && date < end;
-  }
-  if (period === "month") return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
-  if (period === "year") return date.getFullYear() === now.getFullYear();
+function inPeriod(entry, period) {
+  const d=makeDateFromString(entryISO(entry)), now=new Date();
+  if(period==="day") return entryISO(entry)===getTodayString();
+  if(period==="week") { const s=startOfWeek(now), e=new Date(s); e.setDate(e.getDate()+7); return d>=s&&d<e; }
+  if(period==="month") return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();
+  if(period==="year") return d.getFullYear()===now.getFullYear();
   return true;
 }
-
-function calculateTotals() {
-  let totalIncome = 0;
-  let totalExpenses = 0;
-  for (let i = 0; i < budgetEntries.length; i++) {
-    if (budgetEntries[i].type === "income") totalIncome += Number(budgetEntries[i].amount) || 0;
-    if (budgetEntries[i].type === "expense") totalExpenses += Number(budgetEntries[i].amount) || 0;
-  }
-  return { income: totalIncome, expenses: totalExpenses, balance: totalIncome - totalExpenses };
+function periodEntries(period) { return budgetEntries.filter(e=>e.type==="expense"&&inPeriod(e,period)); }
+function drawLimits() {
+  const labels={day:"Today",week:"This week",month:"This month",year:"This year"};
+  const box=getElement("limitOverview"); box.innerHTML="";
+  ["day","week","month","year"].forEach(period=>{
+    const limit=Number(spendingLimits[period])||0;
+    const spent=periodEntries(period).reduce((s,e)=>s+Number(e.amount),0);
+    const remaining=limit-spent, pct=limit>0?Math.min(100,spent/limit*100):0;
+    const card=document.createElement("div"); card.className="limit-item";
+    const title=document.createElement("strong"); title.textContent=labels[period];
+    const detail=document.createElement("span"); detail.textContent=limit>0?
+      `${formatPeso(spent)} of ${formatPeso(limit)} · ${remaining>=0?formatPeso(remaining)+" left":formatPeso(-remaining)+" over"}`:
+      `${formatPeso(spent)} spent · No limit`;
+    const track=document.createElement("div"); track.className="limit-progress-track";
+    const bar=document.createElement("div"); bar.className="limit-progress"+(remaining<0?" danger":pct>=80?" warning":"");
+    bar.style.width=pct+"%"; track.appendChild(bar);
+    card.append(title,detail,track); box.appendChild(card);
+    getElement("limit-"+period).value=limit||"";
+  });
 }
-
-function getExpensesForPeriod(period) {
-  let total = 0;
-  for (let i = 0; i < budgetEntries.length; i++) {
-    const entry = budgetEntries[i];
-    if (entry.type === "expense" && matchesPeriod(entry, period)) total += Number(entry.amount) || 0;
-  }
-  return total;
-}
-
-function periodLabel(period) {
-  return { day: "Today", week: "This week", month: "This month", year: "This year" }[period];
-}
-
-function drawLimitSummaries() {
-  const container = getElement("limitSummaries");
-  container.innerHTML = "";
-  const periods = ["day", "week", "month", "year"];
-  for (let i = 0; i < periods.length; i++) {
-    const period = periods[i];
-    const limit = Number(spendingLimits[period]) || 0;
-    const spent = getExpensesForPeriod(period);
-    const remaining = limit - spent;
-    const card = document.createElement("div");
-    card.className = "limit-summary";
-    const title = document.createElement("strong");
-    title.textContent = periodLabel(period);
-    const detail = document.createElement("span");
-    detail.textContent = "Spent: " + formatPeso(spent);
-    const status = document.createElement("small");
-    if (limit <= 0) status.textContent = "No limit set";
-    else if (remaining < 0) status.textContent = formatPeso(Math.abs(remaining)) + " over limit";
-    else status.textContent = formatPeso(remaining) + " remaining";
-    const track = document.createElement("div");
-    track.className = "limit-progress-track";
-    const bar = document.createElement("div");
-    bar.className = "limit-progress";
-    bar.style.width = limit > 0 ? Math.min((spent / limit) * 100, 100) + "%" : "0%";
-    if (limit > 0 && spent > limit) bar.classList.add("danger");
-    else if (limit > 0 && spent >= limit * 0.8) bar.classList.add("warning");
-    track.appendChild(bar);
-    card.append(title, detail, status, track);
-    container.appendChild(card);
-  }
-}
-
-getElement("limitsForm").addEventListener("submit", function (event) {
-  event.preventDefault();
-  const periods = ["day", "week", "month", "year"];
-  const ids = { day: "dailyLimit", week: "weeklyLimit", month: "monthlyLimit", year: "yearlyLimit" };
-  const updated = {};
-  for (let i = 0; i < periods.length; i++) {
-    const period = periods[i];
-    const raw = getElement(ids[period]).value.trim();
-    if (raw === "") updated[period] = 0;
-    else {
-      const value = Math.round(Number(raw) * 100) / 100;
-      if (!Number.isFinite(value) || value <= 0) {
-        getElement("limitsMsg").textContent = "Enter a positive amount or leave the field blank.";
-        return;
-      }
-      updated[period] = value;
-    }
-  }
-  spendingLimits = updated;
-  saveData("spendingLimits", spendingLimits);
-  getElement("limitsMsg").textContent = "Spending limits saved.";
-  drawLimitSummaries();
+getElement("limitForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  ["day","week","month","year"].forEach(k=>{
+    const v=getElement("limit-"+k).value.trim();
+    spendingLimits[k]=v===""?0:Math.max(0,Number(v)||0);
+  });
+  localStorage.setItem("spendingLimits",JSON.stringify(spendingLimits));
+  getElement("limitMsg").textContent="Spending limits saved."; drawBudget();
 });
-
-function loadLimitInputs() {
-  getElement("dailyLimit").value = spendingLimits.day || "";
-  getElement("weeklyLimit").value = spendingLimits.week || "";
-  getElement("monthlyLimit").value = spendingLimits.month || "";
-  getElement("yearlyLimit").value = spendingLimits.year || "";
+function canAddExpense(amount, oldAmount=0) {
+  const now=new Date();
+  for(const period of ["day","week","month","year"]) {
+    const limit=Number(spendingLimits[period])||0;
+    if(!limit) continue;
+    const spent=periodEntries(period).reduce((s,e)=>s+Number(e.amount),0)-oldAmount;
+    if(spent+amount>limit+0.00001) return period;
+  }
+  return "";
 }
-
-function addToDeletedHistory(entry, source) {
-  deletedEntries.unshift({ entry: entry, source: source, deletedAt: new Date().toISOString() });
-  saveData("deletedBudget", deletedEntries);
+function addToDeleted(entry) {
+  deletedEntries.unshift({entry,deletedAt:new Date().toISOString()});
+  saveData("deletedBudget",deletedEntries);
 }
-
 function drawDeletedHistory() {
-  const list = getElement("deletedList");
-  list.innerHTML = "";
-  getElement("deletedCount").textContent = deletedEntries.length;
-  getElement("clearHistoryButton").hidden = deletedEntries.length === 0;
-  if (deletedEntries.length === 0) {
-    list.appendChild(createEmptyRow("No deleted records."));
-    return;
-  }
-
-  for (let i = 0; i < deletedEntries.length; i++) {
-    const record = deletedEntries[i];
-    const entry = record.entry;
-    const row = document.createElement("li");
-    const info = document.createElement("div");
-    info.className = "grow";
-    info.textContent = entry.type === "task" ? "To-do: " + entry.task.text : entry.desc;
-    const meta = document.createElement("small");
-    const deletedDate = new Date(record.deletedAt);
-    meta.textContent = (entry.type === "task" ? "Task" : (entry.category || "Other") + " · " + formatPeso(entry.amount)) +
-      " · Deleted " + deletedDate.toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" });
+  const list=getElement("deletedList"); list.innerHTML="";
+  getElement("deletedCount").textContent=deletedEntries.length;
+  getElement("clearHistoryButton").hidden=!deletedEntries.length;
+  if(!deletedEntries.length){list.appendChild(createEmptyRow("No deleted entries."));return;}
+  deletedEntries.forEach((record,index)=>{
+    const li=document.createElement("li"), info=document.createElement("div"); info.className="grow";
+    info.textContent=record.entry.desc;
+    const meta=document.createElement("small");
+    meta.textContent=`${record.entry.category||"Uncategorized"} · ${formatPeso(record.entry.amount)} · Deleted ${new Date(record.deletedAt).toLocaleString()}`;
     info.appendChild(meta);
-
-    const restore = document.createElement("button");
-    restore.type = "button";
-    restore.className = "small-action";
-    restore.textContent = "Restore";
-    restore.onclick = function () {
-      if (record.source === "todo" && entry.task) {
-        todoTasks.unshift(entry.task);
-        sortTasksByDueDate();
-        saveData("tasks", todoTasks);
-        drawTodo();
-      } else {
-        budgetEntries.unshift(entry);
-        saveData("budget", budgetEntries);
-      }
-      deletedEntries.splice(i, 1);
-      saveData("deletedBudget", deletedEntries);
-      drawBudget();
-    };
-
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.className = "del";
-    remove.textContent = "✕";
-    remove.setAttribute("aria-label", "Permanently delete history record");
-    remove.onclick = function () {
-      if (!confirm("Permanently delete this history record? This cannot be undone.")) return;
-      deletedEntries.splice(i, 1);
-      saveData("deletedBudget", deletedEntries);
-      drawDeletedHistory();
-    };
-    row.append(info, restore, remove);
-    list.appendChild(row);
+    const restore=document.createElement("button"); restore.className="small-action"; restore.textContent="Restore";
+    restore.onclick=()=>{budgetEntries.unshift(record.entry);deletedEntries.splice(index,1);saveData("budget",budgetEntries);saveData("deletedBudget",deletedEntries);drawBudget();};
+    const remove=document.createElement("button"); remove.className="del"; remove.textContent="✕";
+    remove.onclick=()=>{if(confirm("Permanently delete this history record?")){deletedEntries.splice(index,1);saveData("deletedBudget",deletedEntries);drawDeletedHistory();}};
+    li.append(info,restore,remove);list.appendChild(li);
+  });
+}
+function clearDeletedHistory(){
+  if(deletedEntries.length&&confirm("Permanently clear all deleted history?")){
+    deletedEntries=[];saveData("deletedBudget",deletedEntries);drawDeletedHistory();
   }
 }
-
-function clearDeletedHistory() {
-  if (!deletedEntries.length) return;
-  if (confirm("Permanently clear all deleted history records? This cannot be undone.")) {
-    deletedEntries = [];
-    saveData("deletedBudget", deletedEntries);
-    drawDeletedHistory();
-  }
-}
-
-function editBudgetEntry(entry) {
-  const newDesc = prompt("Edit description:", entry.desc);
-  if (newDesc === null) return;
-  if (!newDesc.trim()) { alert("Description cannot be empty."); return; }
-
-  const newAmountText = prompt("Edit amount (₱):", String(entry.amount));
-  if (newAmountText === null) return;
-  const newAmount = Math.round(Number(newAmountText) * 100) / 100;
-  if (!Number.isFinite(newAmount) || newAmount <= 0) { alert("Enter an amount greater than 0."); return; }
-
-  const categories = ["Food", "Transportation", "School", "Bills", "Shopping", "Health", "Entertainment", "Other"];
-  const categoryPrompt = "Choose category by number:\n" + categories.map((c, i) => (i + 1) + ". " + c).join("\n");
-  const selected = prompt(categoryPrompt, String(Math.max(1, categories.indexOf(entry.category || "Other") + 1)));
-  if (selected === null) return;
-  const categoryIndex = Number(selected) - 1;
-  if (!Number.isInteger(categoryIndex) || categoryIndex < 0 || categoryIndex >= categories.length) {
-    alert("Invalid category selection.");
-    return;
-  }
-
-  const old = { desc: entry.desc, amount: entry.amount, category: entry.category };
-  entry.desc = newDesc.trim();
-  entry.amount = newAmount;
-  entry.category = categories[categoryIndex];
-
-  const totals = calculateTotals();
-  if (totals.balance < -0.000001) {
-    Object.assign(entry, old);
-    alert("This change would make your balance negative.");
-    return;
-  }
-
-  const periods = ["day", "week", "month", "year"];
-  for (let i = 0; i < periods.length; i++) {
-    const period = periods[i];
-    const limit = Number(spendingLimits[period]) || 0;
-    if (entry.type === "expense" && limit > 0 && getExpensesForPeriod(period) > limit + 0.000001) {
-      Object.assign(entry, old);
-      alert("This change would exceed your " + period + " spending limit.");
-      return;
-    }
-  }
-
-  saveData("budget", budgetEntries);
-  drawBudget();
-}
-
 function drawBudget() {
-  const totals = calculateTotals();
-  getElement("income").textContent = formatPeso(totals.income);
-  getElement("expenses").textContent = formatPeso(totals.expenses);
-  getElement("balance").textContent = (totals.balance < 0 ? "−" : "") + formatPeso(Math.abs(totals.balance));
-
-  const list = getElement("budgetList");
-  list.innerHTML = "";
-  const visible = budgetEntries.filter(function (entry) {
-    const matchesText = (entry.desc + " " + (entry.category || "Other")).toLowerCase().includes(entrySearchText);
-    return matchesPeriod(entry, expensePeriod) && matchesText;
-  });
-
-  if (visible.length === 0) {
-    list.appendChild(createEmptyRow(budgetEntries.length ? "No entries match your filter or search." : "No entries yet. Add your first income or expense above."));
-  }
-
-  for (let i = 0; i < visible.length; i++) {
-    const entry = visible[i];
-    const row = document.createElement("li");
-    const info = document.createElement("div");
-    info.className = "grow";
-    info.textContent = entry.desc;
-    const meta = document.createElement("small");
-    meta.textContent = (entry.category || "Other") + " · " + (entry.date || getEntryDateISO(entry));
+  const totals=calculateTotals();
+  getElement("income").textContent=formatPeso(totals.income);
+  getElement("expenses").textContent=formatPeso(totals.expenses);
+  getElement("balance").textContent=(totals.balance<0?"−":"")+formatPeso(Math.abs(totals.balance));
+  const period=getElement("expensePeriod").value;
+  const list=getElement("budgetList"); list.innerHTML="";
+  const q=entrySearchText.toLowerCase();
+  const visible=budgetEntries.filter(e=>inPeriod(e,period)&&
+    (e.desc.toLowerCase().includes(q)||(e.category||"").toLowerCase().includes(q)));
+  if(!visible.length) list.appendChild(createEmptyRow("No matching entries."));
+  visible.forEach(entry=>{
+    const li=document.createElement("li"), info=document.createElement("div");info.className="grow";
+    info.textContent=entry.desc;
+    const meta=document.createElement("small");meta.textContent=`${entry.date||entryISO(entry)} · ${entry.category||"Other"} · ${entry.type}`;
     info.appendChild(meta);
-
-    const amount = document.createElement("span");
-    amount.className = entry.type === "income" ? "amt in" : "amt out";
-    amount.textContent = (entry.type === "income" ? "+" : "−") + formatPeso(entry.amount);
-
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.className = "small-action";
-    edit.textContent = "Edit";
-    edit.onclick = function () { editBudgetEntry(entry); };
-
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "del";
-    del.textContent = "✕";
-    del.setAttribute("aria-label", "Delete " + entry.desc);
-    del.onclick = function () {
-      if (!confirm("Move this entry to deleted history?\n\n" + entry.desc + " (" + formatPeso(entry.amount) + ")")) return;
-      const index = budgetEntries.indexOf(entry);
-      if (index !== -1) {
-        addToDeletedHistory(budgetEntries.splice(index, 1)[0], "budget");
-        saveData("budget", budgetEntries);
-        drawBudget();
-      }
-    };
-    row.append(info, amount, edit, del);
-    list.appendChild(row);
-  }
-
-  getElement("budgetCount").textContent = visible.length + (visible.length === 1 ? " entry shown" : " entries shown");
-  drawLimitSummaries();
-  drawDeletedHistory();
-}
-
-getElement("expensePeriod").addEventListener("change", function (event) {
-  expensePeriod = event.target.value;
-  drawBudget();
-});
-getElement("entrySearch").addEventListener("input", function (event) {
-  entrySearchText = event.target.value.trim().toLowerCase();
-  drawBudget();
-});
-
-// =====================================
-// BUDGET FORM
-// =====================================
-
-getElement("budgetForm").addEventListener("submit", function (event) {
-  event.preventDefault();
-  const description = getElement("desc").value.trim();
-  const amountText = getElement("amount").value.trim();
-  const type = getElement("type").value;
-  const category = getElement("category").value;
-  const message = getElement("budgetMsg");
-
-  if (!description || !amountText) { message.textContent = "Enter a description and an amount."; return; }
-  const amount = Math.round(Number(amountText) * 100) / 100;
-  if (!Number.isFinite(amount) || amount <= 0) { message.textContent = "The amount must be greater than 0."; return; }
-
-  if (type === "expense") {
-    const totals = calculateTotals();
-    if (amount > totals.balance + 0.000001) {
-      message.textContent = "Not enough balance. Available balance: " + formatPeso(Math.max(0, totals.balance)) + ".";
-      return;
-    }
-    const candidate = { type: "expense", amount: amount, dateISO: getLocalDateString(new Date()) };
-    const periods = ["day", "week", "month", "year"];
-    for (let i = 0; i < periods.length; i++) {
-      const period = periods[i];
-      const limit = Number(spendingLimits[period]) || 0;
-      if (limit > 0 && getExpensesForPeriod(period) + amount > limit + 0.000001) {
-        message.textContent = "This expense exceeds your remaining " + period + " limit of " +
-          formatPeso(Math.max(0, limit - getExpensesForPeriod(period))) + ".";
-        return;
-      }
-    }
-  }
-
-  message.textContent = "";
-  const now = new Date();
-  budgetEntries.unshift({
-    desc: description,
-    amount: amount,
-    type: type,
-    category: category,
-    date: now.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }),
-    dateISO: getLocalDateString(now),
+    const amount=document.createElement("span");amount.className="amt "+(entry.type==="income"?"in":"out");
+    amount.textContent=(entry.type==="income"?"+":"−")+formatPeso(entry.amount);
+    const edit=document.createElement("button");edit.className="small-action";edit.textContent="Edit";
+    edit.onclick=()=>beginEdit(entry);
+    const del=document.createElement("button");del.className="del";del.textContent="✕";del.setAttribute("aria-label","Delete "+entry.desc);
+    del.onclick=()=>{if(confirm("Move this entry to deleted history?\n\n"+entry.desc+" ("+formatPeso(entry.amount)+")")){
+      const i=budgetEntries.indexOf(entry);if(i>=0){addToDeleted(budgetEntries.splice(i,1)[0]);saveData("budget",budgetEntries);drawBudget();}
+    }};
+    li.append(info,amount,edit,del);list.appendChild(li);
   });
-  saveData("budget", budgetEntries);
-  drawBudget();
-  getElement("desc").value = "";
-  getElement("amount").value = "";
-  getElement("desc").focus();
-});
-
-// =====================================
-// CLEAR BUDGET
-// =====================================
-
-function clearBudget() {
-  if (!budgetEntries.length) return;
-  if (!confirm("Move all " + budgetEntries.length + " entries to deleted history?")) return;
-  for (let i = 0; i < budgetEntries.length; i++) addToDeletedHistory(budgetEntries[i], "budget");
-  budgetEntries = [];
-  saveData("budget", budgetEntries);
-  drawBudget();
+  getElement("budgetCount").textContent=visible.length+" entr"+(visible.length===1?"y":"ies")+" shown";
+  drawLimits();drawDeletedHistory();drawExpenseChart();drawMonthlyReport();
 }
+function beginEdit(entry){
+  editingEntry=entry;
+  getElement("desc").value=entry.desc;
+  getElement("amount").value=entry.amount;
+  getElement("type").value=entry.type;
+  getElement("category").value=entry.category||"Other";
+  getElement("budgetSubmit").textContent="Save changes";
+  getElement("cancelEdit").hidden=false;
+  getElement("desc").focus();
+}
+function cancelEdit(){
+  editingEntry=null;getElement("budgetForm").reset();
+  getElement("budgetSubmit").textContent="Add entry";getElement("cancelEdit").hidden=true;
+}
+getElement("cancelEdit").addEventListener("click",cancelEdit);
+getElement("expensePeriod").addEventListener("change",drawBudget);
+getElement("entrySearch").addEventListener("input",e=>{entrySearchText=e.target.value.trim();drawBudget();});
+getElement("budgetForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  const desc=getElement("desc").value.trim(), amount=Math.round(Number(getElement("amount").value)*100)/100;
+  const type=getElement("type").value, category=getElement("category").value;
+  const msg=getElement("budgetMsg");
+  if(!desc||!Number.isFinite(amount)||amount<=0){msg.textContent="Enter a description and an amount greater than 0.";return;}
+  const oldExpense=editingEntry&&editingEntry.type==="expense"?Number(editingEntry.amount):0;
+  if(type==="expense"){
+    const balance=calculateTotals().balance+(editingEntry?(editingEntry.type==="expense"?editingEntry.amount:-editingEntry.amount):0);
+    if(amount>balance){msg.textContent="Not enough balance for this expense.";return;}
+    const exceeded=canAddExpense(amount,oldExpense);
+    if(exceeded){msg.textContent="This entry exceeds your "+exceeded+" spending limit.";return;}
+  }
+  msg.textContent="";
+  if(editingEntry){
+    Object.assign(editingEntry,{desc,amount,type,category});
+    cancelEdit();
+  } else {
+    const now=new Date();
+    budgetEntries.unshift({desc,amount,type,category,date:now.toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"}),dateISO:getTodayString()});
+    getElement("budgetForm").reset();
+  }
+  saveData("budget",budgetEntries);drawBudget();
+});
+function clearBudget(){
+  if(!budgetEntries.length)return;
+  if(confirm(`Move all ${budgetEntries.length} entries to deleted history?`)){
+    budgetEntries.forEach(addToDeleted);budgetEntries=[];saveData("budget",budgetEntries);drawBudget();
+  }
+}
+
+// Chart: native canvas drawing, no external chart library required.
+function drawExpenseChart(){
+  const canvas=getElement("expenseChart"),ctx=canvas.getContext("2d");
+  const month=getElement("chartMonth").value||getTodayString().slice(0,7);
+  const sums={};
+  budgetEntries.filter(e=>e.type==="expense"&&entryISO(e).slice(0,7)===month)
+    .forEach(e=>{const c=e.category||"Other";sums[c]=(sums[c]||0)+Number(e.amount);});
+  const dpr=window.devicePixelRatio||1,w=canvas.clientWidth||300,h=240;
+  canvas.width=w*dpr;canvas.height=h*dpr;ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);
+  const items=Object.entries(sums).sort((a,b)=>b[1]-a[1]);
+  getElement("chartLegend").innerHTML="";
+  if(!items.length){ctx.fillStyle=getComputedStyle(document.body).color;ctx.font="14px sans-serif";ctx.textAlign="center";ctx.fillText("No expenses for this month",w/2,120);return;}
+  const colors=["#3767c7","#e08a36","#269b78","#ad65c7","#d65b62","#5c9eb5","#9b9b45","#777"];
+  const total=items.reduce((s,x)=>s+x[1],0);let angle=-Math.PI/2;
+  items.forEach(([name,value],i)=>{
+    const slice=value/total*Math.PI*2;ctx.beginPath();ctx.moveTo(w/2,112);ctx.arc(w/2,112,82,angle,angle+slice);ctx.closePath();ctx.fillStyle=colors[i%colors.length];ctx.fill();angle+=slice;
+    const legend=document.createElement("span");legend.textContent=`${name}: ${formatPeso(value)}`;legend.style.borderLeft=`4px solid ${colors[i%colors.length]}`;getElement("chartLegend").appendChild(legend);
+  });
+  ctx.fillStyle=getComputedStyle(document.body).color;ctx.font="bold 13px sans-serif";ctx.textAlign="center";ctx.fillText(formatPeso(total),w/2,116);
+}
+function drawMonthlyReport(){
+  const month=getElement("reportMonth").value||getTodayString().slice(0,7);
+  const entries=budgetEntries.filter(e=>entryISO(e).slice(0,7)===month);
+  const t=totalsFor(entries);
+  const container=getElement("monthlyReport");
+  const heading=document.createElement("h3");heading.textContent=new Date(month+"-02").toLocaleDateString("en-PH",{month:"long",year:"numeric"});
+  const table=document.createElement("table");table.className="report-table";
+  [["Total income",t.income],["Total expenses",t.expenses],["Net balance",t.balance]].forEach(([label,value])=>{
+    const tr=document.createElement("tr"),th=document.createElement("th"),td=document.createElement("td");
+    th.textContent=label;td.textContent=formatPeso(value);tr.append(th,td);table.appendChild(tr);
+  });
+  const categoryTotals={};entries.filter(e=>e.type==="expense").forEach(e=>{const c=e.category||"Other";categoryTotals[c]=(categoryTotals[c]||0)+Number(e.amount);});
+  const categoryTitle=document.createElement("h4");categoryTitle.textContent="Expenses by category";
+  const categoryList=document.createElement("ul");
+  Object.entries(categoryTotals).sort((a,b)=>b[1]-a[1]).forEach(([cat,val])=>{const li=document.createElement("li");li.textContent=cat+": "+formatPeso(val);categoryList.appendChild(li);});
+  container.replaceChildren(heading,table,categoryTitle,categoryList);
+}
+getElement("chartMonth").addEventListener("change",drawExpenseChart);
+getElement("reportMonth").addEventListener("change",drawMonthlyReport);
+getElement("printReport").addEventListener("click",()=>window.print());
 
 // =====================================
 // TO-DO FUNCTIONS
@@ -761,11 +591,11 @@ function drawTodo() {
     deleteButton.setAttribute("aria-label", "Delete " + currentTask.text);
 
     deleteButton.onclick = function () {
-      if (!confirm("Move this task to deleted history?\\n\\n" + currentTask.text)) return;
-      addToDeletedHistory({ type: "task", task: currentTask }, "todo");
+      if (!confirm("Delete this task?")) return;
       todoTasks.splice(todoTasks.indexOf(currentTask), 1);
+
       saveData("tasks", todoTasks);
-      drawDeletedHistory();
+
       drawTodo();
     };
 
@@ -884,16 +714,17 @@ getElement("filters").addEventListener("click", function (event) {
 
 function clearDone() {
   const remainingTasks = [];
+
   for (let taskIndex = 0; taskIndex < todoTasks.length; taskIndex++) {
-    if (todoTasks[taskIndex].done === true) {
-      addToDeletedHistory({ type: "task", task: todoTasks[taskIndex] }, "todo");
-    } else {
+    if (todoTasks[taskIndex].done === false) {
       remainingTasks.push(todoTasks[taskIndex]);
     }
   }
+
   todoTasks = remainingTasks;
+
   saveData("tasks", todoTasks);
-  drawDeletedHistory();
+
   drawTodo();
 }
 
@@ -903,6 +734,9 @@ function clearDone() {
 
 sortTasksByDueDate();
 updateDateLimit();
+const currentMonthValue = getTodayString().slice(0, 7);
+getElement("chartMonth").value = currentMonthValue;
+getElement("reportMonth").value = currentMonthValue;
 
 drawBudget();
 drawTodo();
