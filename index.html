@@ -25,7 +25,7 @@
   <body>
     <div class="wrap">
       <h1>Budget & To-Do</h1>
-            <h3><p>"Track what you spend. Finish what you start."</p></h3>
+            <p class="tagline">"Track what you spend. Finish what you start."</p>
 
       <div class="tabs" role="tablist">
         <button
@@ -66,6 +66,24 @@
             ><strong class="out" id="expenses">₱0.00</strong>
           </div>
         </div>
+
+        <section class="card" aria-labelledby="expenseSummaryHeading">
+  <h2 id="expenseSummaryHeading">Expense Summary</h2>
+
+  <div class="filters" id="expenseSummaryFilters">
+    <button type="button" data-summary-period="daily" aria-pressed="true">
+      Daily
+    </button>
+    <button type="button" data-summary-period="weekly" aria-pressed="false">
+      Weekly
+    </button>
+    <button type="button" data-summary-period="monthly" aria-pressed="false">
+      Monthly
+    </button>
+  </div>
+
+  <h2 id="expenseTotal">₱0.00</h2>
+</section>
 
         <section class="card budget-limit-card" aria-labelledby="limitHeading">
           <h2 id="limitHeading">Spending limits</h2>
@@ -130,7 +148,7 @@
             </select>
           </label>
         </div>
-        <div class="card"><ul id="budgetList"></ul></div>
+        <div class="card entries-list-card"><ul id="budgetList"></ul></div>
         <div class="foot">
           <span id="budgetCount"></span
           ><button class="link" onclick="clearBudget()">
@@ -157,7 +175,7 @@
           <summary>Deleted history <span id="deletedCount" class="history-count">0</span></summary>
           <p class="muted-note">Deleted budget entries are kept here. You can restore them or permanently remove them.</p>
           <div class="card"><ul id="deletedList"></ul></div>
-          <button class="link" id="clearHistoryButton" type="button" onclick="clearDeletedHistory()">
+          <button class="link" id="clearHistoryButton" type="button">
             Clear deleted history
           </button>
         </details>
@@ -187,7 +205,7 @@
           <button aria-pressed="false" data-f="active">To do</button>
           <button aria-pressed="false" data-f="done">Done</button>
         </div>
-        <div class="card"><ul id="todoList"></ul></div>
+        <div class="card todo-list-card"><ul id="todoList"></ul></div>
         <div class="foot">
           <span id="todoCount"></span
           ><button class="link" onclick="clearDone()">
