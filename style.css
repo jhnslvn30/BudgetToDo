@@ -363,204 +363,119 @@ li.soon small {
 }
 
 
-/* =========================================================
-   RESPONSIVE DESKTOP LAYOUT
-   Mobile styles above remain the default. These rules use
-   the extra horizontal space on tablets/laptops/desktops.
-   ========================================================= */
-
+/* ===== Desktop refinement: centered header and balanced work areas ===== */
+.app-header {
+  text-align: center;
+  margin-bottom: 22px;
+}
+.app-header h1 {
+  margin-bottom: 5px;
+}
+.tagline {
+  margin: 0 0 18px;
+  color: var(--muted);
+}
+.app-header .tabs {
+  width: min(100%, 760px);
+  margin: 0 auto 16px;
+}
+.app-header .tabs button {
+  padding: 13px 18px;
+}
+.entry-workspace,
+.analytics-workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.88fr) minmax(0, 1.5fr);
+  gap: 20px;
+  align-items: start;
+}
+.entry-form-column,
+.entries-column {
+  min-width: 0;
+}
+.entry-form-column #budgetForm {
+  position: sticky;
+  top: 18px;
+}
+.entries-column .entries-tools {
+  margin-bottom: 12px;
+}
+.entries-column .entries-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+.entries-column .entries-heading h2 {
+  margin: 0;
+}
+.entries-column .filter-control {
+  display: grid;
+  gap: 4px;
+  min-width: min(220px, 48%);
+  color: var(--muted);
+  font-size: .85rem;
+}
+.entries-column > .card {
+  min-height: 110px;
+}
+.analytics-workspace {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 24px;
+}
+.analytics-workspace > section {
+  min-width: 0;
+  margin-bottom: 0;
+}
+.history-panel {
+  margin-top: 22px;
+}
 @media (min-width: 900px) {
   .wrap {
-    width: min(100% - 64px, 1240px);
-    max-width: 1240px;
-    padding: 34px 0 64px;
+    width: min(100% - 48px, 1440px);
+    max-width: 1440px;
+    padding: 30px 0 56px;
   }
-
-  h1 {
-    font-size: 2rem;
-    margin-bottom: 4px;
-  }
-
-  .tagline {
-    margin: 0 0 22px;
-    color: var(--muted);
-  }
-
-  .tabs {
-    max-width: 440px;
-    margin-bottom: 22px;
-  }
-
-  /* Budget dashboard: two balanced columns with full-width
-     summary and report sections where they need more room. */
-  #budget {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 18px 22px;
-    align-items: start;
-  }
-
-  #budget > * {
-    min-width: 0;
-    margin-bottom: 0;
-  }
-
-  #budget > .summary,
-  #budget > .analytics-panel,
-  #budget > .report-panel,
-  #budget > .history-panel {
-    grid-column: 1 / -1;
-  }
-
-  #budget > .summary {
-    grid-template-columns: 1.35fr 1fr 1fr;
-    gap: 14px;
-    margin-bottom: 0;
-  }
-
-  #budget > .summary .balance {
-    grid-column: auto;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-height: 112px;
-  }
-
-  #budget > .summary .stat {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-height: 112px;
-    padding: 18px 20px;
-  }
-
-  #budget > .card[aria-labelledby="expenseSummaryHeading"],
-  #budget > .budget-limit-card {
-    height: 100%;
-  }
-
-  #budget > #budgetForm {
-    grid-column: 1;
-    align-self: start;
-  }
-
-  #budget > .entries-tools,
-  #budget > .entries-heading,
-  #budget > .entries-list-card,
-  #budget > .foot {
-    grid-column: 2;
-  }
-
-  #budget > .entries-tools {
-    align-self: end;
-  }
-
-  #budget > .entries-heading {
-    margin-top: -8px;
-  }
-
-  #budget > .entries-list-card {
-    min-height: 190px;
-    max-height: 460px;
-    overflow: auto;
-  }
-
-  #budget > .analytics-panel,
-  #budget > .report-panel {
-    height: 100%;
-  }
-
-  #budget > .analytics-panel {
-    grid-column: 1;
-  }
-
-  #budget > .report-panel {
-    grid-column: 2;
-  }
-
-  #budget > .history-panel {
-    grid-column: 1 / -1;
-  }
-
-  .limit-input-grid {
-    display: grid;
-    gap: 10px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  #expenseChart {
-    max-height: 260px;
-  }
-
-  /* To-do view uses the same two-column rhythm without
-     stretching the task form or making the list too wide. */
-  #todo {
-    display: grid;
-    grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
-    gap: 16px 22px;
-    align-items: start;
-  }
-
-  #todo > * {
-    min-width: 0;
-    margin-bottom: 0;
-  }
-
-  #todo > #todoForm {
-    grid-column: 1;
-    grid-row: 1 / span 3;
-  }
-
-  #todo > #filters,
-  #todo > .todo-list-card,
-  #todo > .foot {
-    grid-column: 2;
-  }
-
-  #todo > .filters {
-    margin-top: 0;
-  }
-
-  #todo > .todo-list-card {
-    min-height: 220px;
-  }
-
-  .card {
-    padding: 20px;
-  }
-
-  .summary,
-  .entries-list-card,
-  #todo .card {
-    border-radius: 16px;
-  }
-}
-
-@media (min-width: 1400px) {
-  .wrap {
-    width: min(100% - 96px, 1320px);
-    max-width: 1320px;
-  }
-
-  #budget {
-    gap: 20px 26px;
-  }
-}
-
-/* Keep tablet landscape comfortable rather than forcing
-   the full desktop dashboard too early. */
-@media (min-width: 700px) and (max-width: 899px) {
-  .wrap {
-    max-width: 820px;
-    padding-left: 24px;
-    padding-right: 24px;
-  }
-
   .summary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1.25fr 1fr 1fr;
   }
-
   .balance {
     grid-column: auto;
+  }
+  #budget > .card[aria-labelledby="expenseSummaryHeading"],
+  #budget > .budget-limit-card {
+    display: inline-block;
+    vertical-align: top;
+    width: calc(50% - 10px);
+    min-height: 100%;
+  }
+  #budget > .card[aria-labelledby="expenseSummaryHeading"] {
+    margin-right: 16px;
+  }
+}
+@media (max-width: 899px) {
+  .entry-workspace,
+  .analytics-workspace {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .entry-form-column #budgetForm {
+    position: static;
+  }
+  .app-header .tabs {
+    width: 100%;
+  }
+}
+@media (max-width: 560px) {
+  .app-header h1 {
+    font-size: 1.5rem;
+  }
+  .entries-column .entries-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .entries-column .filter-control {
+    min-width: 100%;
   }
 }
