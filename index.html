@@ -24,10 +24,10 @@
   </head>
   <body>
     <div class="wrap">
-      <h1>Budget & To-Do</h1>
-            <p class="tagline">"Track what you spend. Finish what you start."</p>
-
-      <div class="tabs" role="tablist">
+      <header class="app-header">
+        <h1>Budget & To-Do</h1>
+        <p class="tagline">"Track what you spend. Finish what you start."</p>
+        <div class="tabs" role="tablist">
         <button
           role="tab"
           id="tab-budget"
@@ -44,7 +44,8 @@
         >
           To-do
         </button>
-      </div>
+        </div>
+      </header>
       <button
         id="reminderBox"
         class="reminder"
@@ -101,6 +102,8 @@
           <div id="limitOverview" class="limit-overview"></div>
         </section>
 
+        <div class="entry-workspace">
+          <div class="entry-form-column">
         <form class="card" id="budgetForm">
           <input
             id="desc"
@@ -132,6 +135,8 @@
           <p class="msg" id="budgetMsg" role="alert"></p>
         </form>
 
+          </div>
+          <div class="entries-column">
         <div class="entries-tools">
           <input id="entrySearch" type="search" placeholder="Search description or category..." aria-label="Search entries">
         </div>
@@ -148,14 +153,17 @@
             </select>
           </label>
         </div>
-        <div class="card entries-list-card"><ul id="budgetList"></ul></div>
+        <div class="card"><ul id="budgetList"></ul></div>
         <div class="foot">
           <span id="budgetCount"></span
           ><button class="link" onclick="clearBudget()">
             Clear all entries
           </button>
         </div>
+          </div>
+        </div>
 
+        <div class="analytics-workspace">
         <section class="card analytics-panel">
           <h2>Expense Charts</h2>
           <p class="muted-note">See how expenses are distributed by category for the selected month.</p>
@@ -170,6 +178,7 @@
           <div id="monthlyReport"></div>
           <button class="primary" id="printReport" type="button">Print monthly report</button>
         </section>
+        </div>
 
         <details class="history-panel">
           <summary>Deleted history <span id="deletedCount" class="history-count">0</span></summary>
@@ -205,7 +214,7 @@
           <button aria-pressed="false" data-f="active">To do</button>
           <button aria-pressed="false" data-f="done">Done</button>
         </div>
-        <div class="card todo-list-card"><ul id="todoList"></ul></div>
+        <div class="card"><ul id="todoList"></ul></div>
         <div class="foot">
           <span id="todoCount"></span
           ><button class="link" onclick="clearDone()">
